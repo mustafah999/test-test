@@ -1,0 +1,24 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>اختبار الغباء المتقدم</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1 id="question">جارٍ تحميل السؤال...</h1>
+    <div id="options"></div>
+    <button id="nextBtn" disabled>السؤال التالي</button>
+    <div id="popup" class="hidden">
+      <div id="popup-content">
+        <p id="explanation"></p>
+        <button onclick="closePopup()">تم</button>
+      </div>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
