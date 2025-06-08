@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>اختبار الذكاء الساخر</title>
+  <style>
+    body { margin:0; padding:0; font-family:sans-serif; background:#f0f0f0; display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .container { background:white; padding:20px; border-radius:12px; box-shadow:0 0 10px rgba(0,0,0,0.1); width:90%; max-width:500px; text-align:right; }
+    h2 { font-size:1.2rem; margin-bottom:20px; }
+    .option { padding:10px; margin:8px 0; border:1px solid #ccc; border-radius:8px; cursor:pointer; transition:0.2s; }
+    .option:hover { background:#fafafa; }
+    .correct { background:#007bff; color:white; }
+    .incorrect { background:#dc3545; color:white; }
+    button { margin-top:15px; padding:10px 20px; font-size:1rem; background:#007bff; color:white; border:none; border-radius:8px; cursor:pointer; }
+    .popup { display:none; margin-top:15px; padding:10px; background:#fff3cd; border:1px solid #ffeeba; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 id="question">جارٍ تحميل السؤال...</h2>
+    <div id="options"></div>
+    <button id="nextBtn">السؤال التالي</button>
+    <div id="popup" class="popup"></div>
+  </div>
+
+  <script>
+    const apiKey = "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";
+    const endpoint = "https://openrouter.ai/api/v1/chat/completions";
+    const model = "openai/gpt-4.1";
+
+    const prompt = `
+أنت منشئ أسئلة لعبة فكاهية ذكية على نمط "اختبار الغباء المتقدم"... (نفس البرومبت المتفق عليه بالكامل)
+`;
+
+    const qEl = document.getElementById("question");
+    const optsEl = document.getElementById("options");
+    const nextBtn = document.getElementById("nextBtn");
+    const popup = document.getElementById("popup");
+
+    let correctLetter = "";
+
+    async function fetchQuestion() {
+      qEl.textContent = "⏳ جاري توليد السؤال...";
+      optsEl.innerHTML = "";
+      popup.style.display = "none";
+
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": window.location.origin,
+            "X-Title": document.title
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.8
+          })
+        });
+        const data = await res.json();
+        const content = data.choices[0].message.content;
+        display(content);
+      } catch (e) {
+        qEl.textContent = "❌ فشل التوليد. حاول مرة ثانية.";
+        console.error(e);
+      }
+    }
+
+    function display(text) {
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      const questionLine = lines.find(l => l.startsWith("السؤال:"));
+      const opts = lines.filter(l => /^[أ-د]\./.test(l));
+      const answerLine = lines.find(l => l.startsWith("الجواب الصحيح:"));
+      const explanationLine = lines.find(l => l.startsWith("التفسير:"));
+
+      correctLetter = answerLine.split(':')[1].trim();
+
+      qEl.textContent = questionLine.replace("السؤال:", "").trim();
+
+      optsEl.innerHTML = "";
+      opts.forEach(opt => {
+        const letter = opt.charAt(0);
+        const div = document.createElement("div");
+        div.className = "option";
+        div.innerText = opt;
+        div.onclick = () => choose(div, letter, explanationLine);
+        optsEl.appendChild(div);
+      });
+    }
+
+    function choose(div, letter, explanationLine) {
+      document.querySelectorAll(".option").forEach(el => el.onclick = null);
+      if (letter === correctLetter) div.classList.add("correct");
+      else {
+        div.classList.add("incorrect");
+        document.querySelectorAll(".option").forEach(el => {
+          if (el.innerText.startsWith(correctLetter + ".")) el.classList.add("correct");
+        });
+      }
+      popup.innerHTML = `<strong>التفسير:</strong> ${explanationLine.replace("التفسير:", "").trim()}`;
+      popup.style.display = "block";
+    }
+
+    nextBtn.onclick = fetchQuestion;
+    fetchQuestion();
+  </script>
+</body>
+</html>
