@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>تطبيق جهات الاتصال</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            overflow: hidden; height: 100%; width: 100%; position: fixed;
+            font-family: 'Cairo', sans-serif; background-color: #808080;
+            -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
+        }
+        .app-container { display: flex; flex-direction: column; height: 100%; }
+        #speech-output-container { padding: 0.75rem 0.5rem 0 0.5rem; }
+        #speech-output {
+            width: 100%; padding: 0.75rem; border-radius: 1rem; border: 2px solid #4A5568;
+            background-color: #F7FAFC; text-align: right; font-size: 1.1rem; font-weight: bold;
+        }
+        .contacts-area {
+            flex-basis: 60%; background-color: white; margin: 0.5rem; 
+            border-radius: 1.5rem; display: flex; flex-direction: column; overflow: hidden;
+        }
+        .contacts-viewport { 
+            height: 400px; overflow: hidden; position: relative; pointer-events: none; 
+        }
+        #empty-list-message {
+            display: flex; align-items: center; justify-content: center;
+            height: 100%; color: #a0aec0; font-size: 1.25rem;
+        }
+        #contacts-list { 
+            transition: transform 0.4s ease-in-out; position: absolute; width: 100%; 
+        }
+        .contact-item {
+            display: flex; align-items: center; justify-content: flex-start; height: 80px;
+            padding: 0 1rem; background-color: white; color: black; border-bottom: 2px solid #e5e7eb;
+            box-sizing: border-box;
+        }
+        .contact-spacer {
+             height: 80px;
+             box-sizing: border-box;
+        }
+        .contact-item.selected { background-color: #3d3d3d; color: white; }
+        .contact-details { text-align: right; margin-right: 1rem; }
+        .contact-initial {
+            width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-size: 1.75rem; font-weight: bold; color: black; flex-shrink: 0;
+        }
+        .window-actions {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0.75rem 1rem; background-color: white; border-top: 2px solid #e5e7eb;
+            margin-top: auto;
+        }
+        .controls-area { flex-basis: 40%; position: relative; overflow: hidden; }
+
+        @keyframes super-light-burst {
+            from { transform: translate(-50%,-50%) scale(0.5); opacity: 0.8; }
+            to { transform: translate(-50%,-50%) scale(3); opacity: 0; }
+        }
+        .action-icon {
+            border-radius: 0.75rem; display: flex; align-items: center; justify-content: center;
+            color: white; cursor: pointer; position: relative; overflow: hidden; 
+            box-shadow: 0px 8px 15px rgba(0, 0, 0, 0.3);
+            transition: transform 0.1s linear, box-shadow 0.1s linear;
+        }
+        .action-icon::before {
+            content: ''; position: absolute; top: 50%; left: 50%;
+            width: 120%; padding-top: 120%; border-radius: 50%;
+            background-image: radial-gradient(circle, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 65%);
+            transform: translate(-50%,-50%) scale(0); opacity: 0;
+        }
+        .action-icon:active {
+            transform: translateY(4px);
+            box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.4);
+        }
+        .action-icon:active::before { animation: super-light-burst 0.35s ease-out; }
+        #arrows-positioner { position: absolute; }
+        .control-btn { 
+            cursor: pointer;
+            transition: transform 0.1s linear, filter 0.1s linear;
+            filter: drop-shadow(0 8px 6px rgba(0,0,0,0.4));
+        }
+        .control-btn:active {
+            transform: translate(4px, 4px);
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.7));
+        }
+        
+        /* -- Microphone Animation & Glow -- */
+        #mic-btn-wrapper {
+             position:absolute; top: 36%; left: 6%; 
+             transform: translate(-6%, -36%);
+             width: 150px; height: 150px;
+        }
+        #mic-glow {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 100%; height: 100%;
+            background-color: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            opacity: 0;
+            z-index: 0;
+        }
+        #mic-glow.glowing {
+            animation: mic-glow-pulse 1.2s infinite ease-out;
+        }
+        #mic-btn {
+             position: relative; z-index: 1;
+        }
+        @keyframes mic-glow-pulse {
+            0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
+            70% { transform: translate(-50%, -50%) scale(1.4); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+        }
+
+        #mic-btn svg {
+            transition: fill 0.3s ease-in-out;
+        }
+        
+        @keyframes listening-pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+            100% { transform: scale(1); }
+        }
+
+        #mic-btn.listening {
+            animation: listening-pulse 1.2s infinite ease-in-out;
+        }
+        
+        #mic-btn.listening svg {
+           fill: #34D399; /* Green color for listening */
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <div id="speech-output-container" class="hidden">
+            <input type="text" id="speech-output" placeholder="الكلام المنطوق يظهر هنا..." readonly>
+        </div>
+        <div class="contacts-area">
+            <div class="contacts-viewport">
+                <div id="contacts-list"></div>
+                <div id="empty-list-message" class="hidden"><p>لا توجد جهات اتصال</p></div>
+            </div>
+            <div class="window-actions">
+                <div id="call-btn" class="action-icon bg-green-500" style="width: 75px; height: 75px;"><i class="fas fa-phone fa-2x"></i></div>
+                <div id="dialer-btn" class="action-icon" style="background-color: #0072b2; width: 75px; height: 75px;">
+                    <svg width="40" height="40" viewBox="0 0 100 100" fill="white">
+                        <circle cx="20" cy="20" r="8"></circle><circle cx="50" cy="20" r="8"></circle><circle cx="80" cy="20" r="8"></circle>
+                        <circle cx="20" cy="50" r="8"></circle><circle cx="50" cy="50" r="8"></circle><circle cx="80" cy="50" r="8"></circle>
+                        <circle cx="20" cy="80" r="8"></circle><circle cx="50" cy="80" r="8"></circle><circle cx="80" cy="80" r="8"></circle>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        <div class="controls-area">
+            <div id="mic-btn-wrapper">
+                <div id="mic-glow"></div>
+                 <div id="mic-btn" class="control-btn">
+                    <svg width="150" height="150" viewBox="0 0 24 24"><path fill="white" d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/></svg>
+                </div>
+            </div>
+            <div id="arrows-positioner" style="top: calc(27% - 2px); left: 77%; transform: translate(-77%, -27%);">
+                <div id="up-btn" class="control-btn"><svg width="124" height="124" viewBox="0 0 100 100" fill="white"><polygon points="50,0 0,50 100,50"/></svg></div>
+                <div id="down-btn" class="control-btn" style="margin-top: -40px;"><svg width="124" height="124" viewBox="0 0 100 100" fill="white"><polygon points="50,100 0,50 100,50"/></svg></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // --- DATA & STATE ---
+        const originalContactList = [
+             { name: 'أحمد علي', phone: '123456789', initial: 'أ', color: '#FFC107' },
+             { name: 'فاطمة الزهراء', phone: '987654321', initial: 'ف', color: '#4CAF50' },
+             { name: 'خالد السيد', phone: '555123456', initial: 'خ', color: '#2196F3' },
+             { name: 'مريم محمد', phone: '789456123', initial: 'م', color: '#E91E63' },
+             { name: 'يوسف حسن', phone: '321654987', initial: 'ي', color: '#9C27B0' },
+             { name: 'سارة عبد الله', phone: '654789321', initial: 'س', color: '#FF5722' },
+        ];
+        let displayList = [];
+        let currentIndex = 0; 
+        let isListening = false;
+        const itemHeight = 80;
+        const viewportCenterOffset = 2 * itemHeight;
+
+        // --- UI ELEMENTS ---
+        const contactsListEl = document.getElementById('contacts-list');
+        const emptyMessageEl = document.getElementById('empty-list-message');
+        const upBtn = document.getElementById('up-btn');
+        const downBtn = document.getElementById('down-btn');
+        const micBtn = document.getElementById('mic-btn');
+        const micGlowEl = document.getElementById('mic-glow');
+        const callBtn = document.getElementById('call-btn');
+        const dialerBtn = document.getElementById('dialer-btn');
+        const speechOutputContainer = document.getElementById('speech-output-container');
+        const speechOutput = document.getElementById('speech-output');
+        
+        // --- SOUND SYNTHESIS (Tone.js) ---
+        let soundsReady = false;
+        let clickSynth, startSynth, endSynth;
+        let clickSoundDebounce = false; // Flag to prevent rapid sound re-triggering
+        
+        function setupSounds() {
+            if (soundsReady) return;
+            Tone.start(); 
+            clickSynth = new Tone.MembraneSynth({
+                pitchDecay: 0.01,
+                octaves: 2,
+                envelope: { attack: 0.001, decay: 0.2, sustain: 0.01, release: 0.1 }
+            }).toDestination();
+
+            startSynth = new Tone.Synth({ 
+                oscillator: { type: 'sine' }, 
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.4 },
+                volume: 8 
+            }).toDestination();
+            
+            endSynth = new Tone.Synth({ 
+                oscillator: { type: 'triangle' }, 
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.4 },
+                volume: 8 
+            }).toDestination();
+            
+            soundsReady = true;
+        }
+        
+        // FIX: Removed Tone.now() and added a debounce flag to prevent errors
+        const playClickSound = () => { 
+            if (soundsReady && !clickSoundDebounce) {
+                clickSynth.triggerAttackRelease("C2", "8n"); 
+                clickSoundDebounce = true;
+                setTimeout(() => { clickSoundDebounce = false; }, 50); // Debounce for 50ms
+            }
+        };
+        const playStartSound = () => { if (soundsReady) startSynth.triggerAttackRelease("C5", "16n"); };
+        const playEndSound = () => { if (soundsReady) endSynth.triggerAttackRelease("G4", "16n"); };
+
+
+        // --- NATIVE FUNCTIONALITY (Simulated) ---
+        function vibratePhone() {
+            if ('vibrate' in navigator) {
+                navigator.vibrate(80); 
+            }
+        }
+
+        function makeNativeCall() { 
+            vibratePhone();
+            if (originalContactList.length > 0) {
+                window.location.href = `tel:${originalContactList[currentIndex].phone}`; 
+            }
+        }
+        function openNativeDialer() { 
+            vibratePhone();
+            window.location.href = 'tel:'; 
+        }
+
+        function startSpeechRecognition() {
+            if (isListening) return; 
+            isListening = true;
+
+            playStartSound();
+            vibratePhone();
+            
+            micBtn.classList.add('listening');
+            micGlowEl.classList.add('glowing');
+            micBtn.querySelector('path').style.fill = '#34D399';
+            
+            speechOutputContainer.classList.remove('hidden');
+            speechOutput.value = "محاكاة الاستماع...";
+
+            setTimeout(() => {
+                isListening = false;
+                playEndSound();
+                micBtn.classList.remove('listening');
+                micGlowEl.classList.remove('glowing');
+                micBtn.querySelector('path').style.fill = 'white';
+                speechOutput.value = "انتهى الاستماع";
+            }, 4000);
+        }
+        
+        // --- CORE UI LOGIC ---
+        function createPaddedList() {
+            if (originalContactList.length === 0) { displayList = []; return; }
+            if (originalContactList.length < 5) { displayList = [...originalContactList]; return; }
+            const listLength = originalContactList.length;
+            const lastTwo = originalContactList.slice(listLength - 2);
+            const firstTwo = originalContactList.slice(0, 2);
+            const spacer = { type: 'spacer' };
+            displayList = [...lastTwo, spacer, spacer, ...originalContactList, spacer, spacer, ...firstTwo];
+        }
+
+        function renderContacts(contactsToRender) {
+            contactsListEl.innerHTML = '';
+            contactsToRender.forEach((contact) => {
+                if(contact.type === 'spacer') {
+                    const spacerDiv = document.createElement('div');
+                    spacerDiv.className = 'contact-spacer';
+                    contactsListEl.appendChild(spacerDiv);
+                } else {
+                    const contactDiv = document.createElement('div');
+                    contactDiv.className = 'contact-item';
+                    contactDiv.innerHTML = `<div class="contact-initial" style="background-color: ${contact.color};">${contact.initial}</div><div class="contact-details" style="font-size: 20px;"><div class="font-bold" style="font-size: 1.25em;">${contact.name}</div><div class="opacity-80" style="font-size: 1em;">${contact.phone}</div></div>`;
+                    contactsListEl.appendChild(contactDiv);
+                }
+            });
+        }
+
+        function updateSelection() { 
+            if (originalContactList.length === 0) return;
+            const paddedIndex = currentIndex + (originalContactList.length < 5 ? 0 : 4);
+            const offset = -(paddedIndex * itemHeight) + viewportCenterOffset;
+            contactsListEl.style.transform = `translateY(${offset}px)`;
+            const allItemsInDom = contactsListEl.children;
+            const domSelectionIndex = paddedIndex;
+            for (let i = 0; i < allItemsInDom.length; i++) {
+                if(allItemsInDom[i].classList.contains('contact-item')) {
+                    allItemsInDom[i].classList.toggle('selected', i === domSelectionIndex);
+                }
+            }
+        }
+        
+        // --- EVENT LISTENERS ---
+        document.body.addEventListener('click', setupSounds, { once: true });
+        
+        upBtn.addEventListener('click', () => { 
+            vibratePhone();
+            playClickSound();
+            if (originalContactList.length === 0) return;
+            currentIndex = (currentIndex - 1 + originalContactList.length) % originalContactList.length;
+            updateSelection();
+        });
+        downBtn.addEventListener('click', () => { 
+            vibratePhone();
+            playClickSound();
+            if (originalContactList.length === 0) return;
+            currentIndex = (currentIndex + 1) % originalContactList.length;
+            updateSelection();
+        });
+
+        // Play sound on press for instant feedback
+        callBtn.addEventListener('mousedown', playClickSound);
+        callBtn.addEventListener('touchstart', playClickSound, { passive: true });
+        dialerBtn.addEventListener('mousedown', playClickSound);
+        dialerBtn.addEventListener('touchstart', playClickSound, { passive: true });
+
+        // Execute navigation on release/click
+        callBtn.addEventListener('click', makeNativeCall);
+        dialerBtn.addEventListener('click', openNativeDialer);
+        
+        micBtn.addEventListener('click', startSpeechRecognition);
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            if (originalContactList.length === 0) {
+                contactsListEl.classList.add('hidden');
+                emptyMessageEl.classList.remove('hidden');
+            } else {
+                createPaddedList();
+                renderContacts(displayList);
+                updateSelection();
+            }
+        };
+    </script>
+</body>
+</html>
+
